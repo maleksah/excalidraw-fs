@@ -1,73 +1,43 @@
-# React + TypeScript + Vite
+# Excalidraw-fs
 
-This template provides a minimal setup to get React working in Vite with HMR and some ESLint rules.
+Excalidraw-fs is an enhanced, modern drawing and diagramming application built around the core [Excalidraw](https://excalidraw.com/) engine. It features a custom file explorer, local storage persistence, and a highly polished user interface with contemporary design aesthetics and smooth animations.
 
-Currently, two official plugins are available:
+This project is built using:
+- **React 19** & **TypeScript**
+- **Vite** for fast development and building
+- **Tailwind CSS** & **Framer Motion** for styling and animations
+- **@excalidraw/excalidraw** for the core drawing canvas
+- **IndexedDB** (`idb-keyval`) for local file storage persistence
 
-- [@vitejs/plugin-react](https://github.com/vitejs/vite-plugin-react/blob/main/packages/plugin-react) uses [Babel](https://babeljs.io/) (or [oxc](https://oxc.rs) when used in [rolldown-vite](https://vite.dev/guide/rolldown)) for Fast Refresh
-- [@vitejs/plugin-react-swc](https://github.com/vitejs/vite-plugin-react/blob/main/packages/plugin-react-swc) uses [SWC](https://swc.rs/) for Fast Refresh
+## Getting Started
 
-## React Compiler
+### Prerequisites
+- Node.js (v18 or higher recommended)
+- npm (Node Package Manager)
 
-The React Compiler is not enabled on this template because of its impact on dev & build performances. To add it, see [this documentation](https://react.dev/learn/react-compiler/installation).
+### How to Run Locally
 
-## Expanding the ESLint configuration
+1. Install the project dependencies:
+   ```bash
+   npm install
+   ```
 
-If you are developing a production application, we recommend updating the configuration to enable type-aware lint rules:
+2. Start the Vite development server:
+   ```bash
+   npm run dev
+   ```
 
-```js
-export default defineConfig([
-  globalIgnores(['dist']),
-  {
-    files: ['**/*.{ts,tsx}'],
-    extends: [
-      // Other configs...
+3. Open your browser and navigate to the local URL provided in the terminal (usually `http://localhost:5173`).
 
-      // Remove tseslint.configs.recommended and replace with this
-      tseslint.configs.recommendedTypeChecked,
-      // Alternatively, use this for stricter rules
-      tseslint.configs.strictTypeChecked,
-      // Optionally, add this for stylistic rules
-      tseslint.configs.stylisticTypeChecked,
+### How to Build for Production
 
-      // Other configs...
-    ],
-    languageOptions: {
-      parserOptions: {
-        project: ['./tsconfig.node.json', './tsconfig.app.json'],
-        tsconfigRootDir: import.meta.dirname,
-      },
-      // other options...
-    },
-  },
-])
-```
+1. To create a production-ready build, run:
+   ```bash
+   npm run build
+   ```
+   This command will compile the TypeScript code and bundle the application into the `dist` folder.
 
-You can also install [eslint-plugin-react-x](https://github.com/Rel1cx/eslint-react/tree/main/packages/plugins/eslint-plugin-react-x) and [eslint-plugin-react-dom](https://github.com/Rel1cx/eslint-react/tree/main/packages/plugins/eslint-plugin-react-dom) for React-specific lint rules:
-
-```js
-// eslint.config.js
-import reactX from 'eslint-plugin-react-x'
-import reactDom from 'eslint-plugin-react-dom'
-
-export default defineConfig([
-  globalIgnores(['dist']),
-  {
-    files: ['**/*.{ts,tsx}'],
-    extends: [
-      // Other configs...
-      // Enable lint rules for React
-      reactX.configs['recommended-typescript'],
-      // Enable lint rules for React DOM
-      reactDom.configs.recommended,
-    ],
-    languageOptions: {
-      parserOptions: {
-        project: ['./tsconfig.node.json', './tsconfig.app.json'],
-        tsconfigRootDir: import.meta.dirname,
-      },
-      // other options...
-    },
-  },
-])
-```
+2. To preview the production build locally and ensure everything works correctly before deployment, run:
+   ```bash
+   npm run preview
+   ```
