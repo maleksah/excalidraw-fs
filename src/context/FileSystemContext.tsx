@@ -61,6 +61,7 @@ interface FileSystemContextType {
     createFile: (parentHandle: FileSystemDirectoryHandle, name: string) => Promise<void>;
     createFolder: (parentHandle: FileSystemDirectoryHandle, name: string) => Promise<void>;
     deleteEntry: (parentHandle: FileSystemDirectoryHandle, name: string) => Promise<void>;
+    moveFile: (sourceParent: FileSystemDirectoryHandle, targetParent: FileSystemDirectoryHandle, fileName: string) => Promise<void>;
     readFileContent: (handle: FileSystemFileHandle) => Promise<string>;
     saveFileContent: (handle: FileSystemFileHandle, content: string) => Promise<void>;
 }
@@ -214,6 +215,34 @@ export const FileSystemProvider = ({ children }: { children: ReactNode }) => {
         }
     };
 
+    const moveFile = async (sourceParent: FileSystemDirectoryHandle, targetParent: FileSystemDirectoryHandle, fileName: string) => {
+        try {
+            // Read the source file content
+            const sourceFileHandle = await sourceParent.getFileHandle(fileName);
+            const sourceFile = await sourceFileHandle.getFile();
+            const content = await sourceFile.text();
+
+            // Create the file in target directory and write content
+            const targetFileHandle = await targetParent.getFileHandle(fileName, { create: true });
+            const writable = await targetFileHandle.createWritable();
+            await writable.write(content);
+            await writable.close();
+
+            // Delete from source
+            await sourceParent.removeEntry(fileName);
+
+            // If the moved file was selected, update selection to the new handle
+            if (selectedFile && selectedFile.name === fileName) {
+                setSelectedFile(null);
+            }
+
+            await refreshDirectory();
+        } catch (err) {
+            console.error('Error moving file:', err);
+            throw err;
+        }
+    };
+
     const readFileContent = async (handle: FileSystemFileHandle): Promise<string> => {
         const file = await handle.getFile();
         return await file.text();
@@ -237,6 +266,7 @@ export const FileSystemProvider = ({ children }: { children: ReactNode }) => {
                 createFile,
                 createFolder,
                 deleteEntry,
+                moveFile,
                 readFileContent,
                 saveFileContent,
             }}
