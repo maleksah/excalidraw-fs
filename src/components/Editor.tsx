@@ -39,14 +39,20 @@ export const Editor = () => {
                         elements: convertToExcalidrawElements(parsed.elements || []),
                         appState: {
                             ...restAppState,
-                            viewBackgroundColor: restAppState?.viewBackgroundColor || '#ffffff'
+                            viewBackgroundColor: restAppState?.viewBackgroundColor || '#ffffff',
+                            currentItemFontFamily: restAppState?.currentItemFontFamily ?? 2,
+                            currentItemRoughness: restAppState?.currentItemRoughness ?? 0,
                         },
                         files: parsed.files || {},
                     });
                 } catch {
                     setInitialData({
                         elements: [],
-                        appState: { viewBackgroundColor: '#ffffff' },
+                        appState: {
+                            viewBackgroundColor: '#ffffff',
+                            currentItemFontFamily: 2,
+                            currentItemRoughness: 0,
+                        },
                         files: {},
                     });
                 }
