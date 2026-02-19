@@ -1,5 +1,8 @@
-import { createContext, useContext, useState, useCallback } from 'react';
+import { createContext, useContext, useState, useCallback, useEffect } from 'react';
 import type { ReactNode } from 'react';
+import { get, set } from 'idb-keyval';
+
+const DIR_HANDLE_KEY = 'excalidraw-last-directory-handle';
 
 // Types for File System Access API (if not fully available in current TS lib)
 // In modern browsers these are global, but we define interfaces for clarity/safety
@@ -7,6 +10,8 @@ export interface FileSystemHandle {
     kind: 'file' | 'directory';
     name: string;
     isSameEntry(other: FileSystemHandle): Promise<boolean>;
+    queryPermission?(options?: { mode: string }): Promise<string>;
+    requestPermission?(options?: { mode: string }): Promise<string>;
 }
 
 export interface FileSystemFileHandle extends FileSystemHandle {
@@ -120,6 +125,37 @@ export const FileSystemProvider = ({ children }: { children: ReactNode }) => {
         return nodes;
     }, []);
 
+    // Restore the last opened directory on mount
+    useEffect(() => {
+        const restoreDirectory = async () => {
+            try {
+                const storedHandle = await get<FileSystemDirectoryHandle>(DIR_HANDLE_KEY);
+                if (!storedHandle) return;
+
+                // Verify we still have permission (may prompt the user)
+                const permission = await (storedHandle as any).queryPermission({ mode: 'readwrite' });
+                if (permission === 'granted') {
+                    setRootHandle(storedHandle);
+                    const tree = await scanDirectory(storedHandle);
+                    setFileTree(tree);
+                    return;
+                }
+
+                // If not granted, try requesting permission
+                const requested = await (storedHandle as any).requestPermission({ mode: 'readwrite' });
+                if (requested === 'granted') {
+                    setRootHandle(storedHandle);
+                    const tree = await scanDirectory(storedHandle);
+                    setFileTree(tree);
+                }
+            } catch (err) {
+                console.warn('Could not restore last directory:', err);
+            }
+        };
+
+        restoreDirectory();
+    }, [scanDirectory]);
+
     const openDirectory = async () => {
         try {
             const handle = await window.showDirectoryPicker();
@@ -127,6 +163,8 @@ export const FileSystemProvider = ({ children }: { children: ReactNode }) => {
             const tree = await scanDirectory(handle);
             setFileTree(tree);
             setSelectedFile(null);
+            // Persist the handle for next page load
+            await set(DIR_HANDLE_KEY, handle);
         } catch (err) {
             if ((err as Error).name !== 'AbortError') {
                 console.error('Error opening directory:', err);

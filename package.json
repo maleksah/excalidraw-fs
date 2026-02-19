@@ -13,6 +13,7 @@
     "@excalidraw/excalidraw": "^0.18.0",
     "clsx": "^2.1.1",
     "framer-motion": "^12.34.2",
+    "idb-keyval": "^6.2.2",
     "lucide-react": "^0.574.0",
     "react": "^19.2.0",
     "react-dom": "^19.2.0",
