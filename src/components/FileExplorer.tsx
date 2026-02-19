@@ -1,4 +1,4 @@
-import { useState, useRef, useEffect, useCallback } from 'react';
+import { useState, useRef, useEffect, useCallback, useMemo } from 'react';
 import { useFileSystem } from '../context/FileSystemContext';
 import type { FileNode, FileSystemDirectoryHandle } from '../context/FileSystemContext';
 import { Folder, FolderOpen, File, FilePlus, FolderPlus, Trash2, ChevronRight, Search } from 'lucide-react';
@@ -59,7 +59,7 @@ const InlineInput = ({ type, onSubmit, onCancel, depth }: {
     );
 };
 
-const FileTreeNodeWithParent = ({ node, depth, parentHandle, inlineAdd, setInlineAdd, dragState, setDragState }: {
+const FileTreeNodeWithParent = ({ node, depth, parentHandle, inlineAdd, setInlineAdd, dragState, setDragState, searchQuery }: {
     node: FileNode;
     depth: number;
     parentHandle: FileSystemDirectoryHandle;
@@ -67,6 +67,7 @@ const FileTreeNodeWithParent = ({ node, depth, parentHandle, inlineAdd, setInlin
     setInlineAdd: (state: InlineAddState) => void;
     dragState: DragState;
     setDragState: (state: DragState) => void;
+    searchQuery?: string;
 }) => {
     const { selectFile, selectedFile, deleteEntry, createFile, createFolder, moveFile } = useFileSystem();
     const [isOpen, setIsOpen] = useState(false);
@@ -83,10 +84,18 @@ const FileTreeNodeWithParent = ({ node, depth, parentHandle, inlineAdd, setInlin
         if (hasInlineAdd && !isOpen) setIsOpen(true);
     }, [hasInlineAdd]);
 
+    const isEffectivelyOpen = isOpen || Boolean(searchQuery);
+
     const handleClick = (e: React.MouseEvent) => {
         e.stopPropagation();
         if (isDirectory) {
-            setIsOpen(!isOpen);
+            if (searchQuery) {
+                // If searching, clicking might toggle local state, but effect is overridden.
+                // We'll just set it to false if it was true, but maybe do nothing or allow toggle
+                setIsOpen(!isEffectivelyOpen);
+            } else {
+                setIsOpen(!isOpen);
+            }
         } else {
             selectFile(node);
         }
@@ -222,7 +231,7 @@ const FileTreeNodeWithParent = ({ node, depth, parentHandle, inlineAdd, setInlin
                 style={{ paddingLeft: `${depth * 16 + 12}px` }}
                 onClick={handleClick}
             >
-                <span className={`tree-node-chevron${isOpen && isDirectory ? ' open' : ''}`}>
+                <span className={`tree-node-chevron${isEffectivelyOpen && isDirectory ? ' open' : ''}`}>
                     {isDirectory && <ChevronRight size={14} strokeWidth={2.5} />}
                 </span>
 
@@ -250,7 +259,7 @@ const FileTreeNodeWithParent = ({ node, depth, parentHandle, inlineAdd, setInlin
             </div>
 
             <AnimatePresence>
-                {(isOpen || hasInlineAdd) && isDirectory && (
+                {(isEffectivelyOpen || hasInlineAdd) && isDirectory && (
                     <motion.div
                         initial={{ opacity: 0, height: 0 }}
                         animate={{ opacity: 1, height: 'auto' }}
@@ -267,6 +276,7 @@ const FileTreeNodeWithParent = ({ node, depth, parentHandle, inlineAdd, setInlin
                                 setInlineAdd={setInlineAdd}
                                 dragState={dragState}
                                 setDragState={setDragState}
+                                searchQuery={searchQuery}
                             />
                         ))}
                         {hasInlineAdd && (
@@ -288,6 +298,31 @@ export const FileExplorer = () => {
     const { rootHandle, fileTree, openDirectory, createFile, createFolder, moveFile } = useFileSystem();
     const [inlineAdd, setInlineAdd] = useState<InlineAddState>(null);
     const [dragState, setDragState] = useState<DragState>(null);
+    const [searchQuery, setSearchQuery] = useState('');
+
+    const filteredTree = useMemo(() => {
+        if (!searchQuery.trim()) return fileTree;
+
+        const lowerQuery = searchQuery.toLowerCase();
+
+        const filterNodes = (nodes: FileNode[]): FileNode[] => {
+            return nodes.map(node => {
+                if (node.kind === 'directory' && node.children) {
+                    const filteredChildren = filterNodes(node.children);
+                    if (filteredChildren.length > 0 || node.name.toLowerCase().includes(lowerQuery)) {
+                        return { ...node, children: filteredChildren };
+                    }
+                    return null;
+                }
+                if (node.name.toLowerCase().includes(lowerQuery)) {
+                    return node;
+                }
+                return null;
+            }).filter(Boolean) as FileNode[];
+        };
+
+        return filterNodes(fileTree);
+    }, [fileTree, searchQuery]);
 
     const handleCreateFile = () => {
         if (!rootHandle) return;
@@ -372,12 +407,18 @@ export const FileExplorer = () => {
 
                 <div className="search-wrapper">
                     <Search size={14} className="search-icon" />
-                    <input type="text" placeholder="Search files..." className="search-input" />
+                    <input
+                        type="text"
+                        placeholder="Search files..."
+                        className="search-input"
+                        value={searchQuery}
+                        onChange={(e) => setSearchQuery(e.target.value)}
+                    />
                 </div>
             </div>
 
             <div className="file-tree" onDragOver={handleRootDragOver} onDrop={handleRootDrop}>
-                {fileTree.map((node) => (
+                {filteredTree.map((node) => (
                     <FileTreeNodeWithParent
                         key={node.id}
                         node={node}
@@ -387,6 +428,7 @@ export const FileExplorer = () => {
                         setInlineAdd={setInlineAdd}
                         dragState={dragState}
                         setDragState={setDragState}
+                        searchQuery={searchQuery}
                     />
                 ))}
 
@@ -399,10 +441,10 @@ export const FileExplorer = () => {
                     />
                 )}
 
-                {fileTree.length === 0 && !inlineAdd && (
+                {filteredTree.length === 0 && !inlineAdd && (
                     <div className="tree-empty">
                         <FolderOpen size={28} strokeWidth={1} />
-                        <span>Empty directory</span>
+                        <span>{searchQuery ? 'No files found' : 'Empty directory'}</span>
                     </div>
                 )}
             </div>
