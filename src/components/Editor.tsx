@@ -1,5 +1,5 @@
 import { useEffect, useState, useRef, useCallback } from 'react';
-import { Excalidraw, convertToExcalidrawElements } from '@excalidraw/excalidraw';
+import { Excalidraw } from '@excalidraw/excalidraw';
 import { useFileSystem } from '../context/FileSystemContext';
 import type { FileSystemFileHandle } from '../context/FileSystemContext';
 import type { ExcalidrawElement } from '@excalidraw/excalidraw/element/types';
@@ -36,7 +36,7 @@ export const Editor = () => {
                     const { collaborators, ...restAppState } = parsed.appState || {};
 
                     setInitialData({
-                        elements: convertToExcalidrawElements(parsed.elements || []),
+                        elements: parsed.elements || [],
                         appState: {
                             ...restAppState,
                             viewBackgroundColor: restAppState?.viewBackgroundColor || '#ffffff',
