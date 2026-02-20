@@ -582,36 +582,36 @@ body,
   background: #2563eb;
 }
 
-/* ========== Sidebar Toggle Button ========== */
 .sidebar-toggle-btn {
   position: absolute;
-  top: 16px;
-  left: 16px;
+  top: 50%;
+  transform: translateY(-50%);
+  left: 0;
   z-index: 40;
   display: flex;
   align-items: center;
   justify-content: center;
-  width: 40px;
-  height: 40px;
-  background: rgba(255, 255, 255, 0.85);
-  backdrop-filter: blur(8px);
-  border: 1px solid rgba(229, 231, 235, 0.8);
-  border-radius: 12px;
-  color: #4b5563;
+  width: 24px;
+  height: 48px;
+  background: #ffffff;
+  border: 1px solid #e5e7eb;
+  border-left: none;
+  border-radius: 0 8px 8px 0;
+  color: #6b7280;
   cursor: pointer;
-  box-shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.05), 0 2px 4px -1px rgba(0, 0, 0, 0.03);
+  box-shadow: 2px 0 4px -1px rgba(0, 0, 0, 0.05);
   transition: all 0.2s cubic-bezier(0.4, 0, 0.2, 1);
 }
 
 .sidebar-toggle-btn:hover {
-  background: #ffffff;
+  background: #f9fafb;
   color: #1f2937;
-  transform: translateY(-1px);
-  box-shadow: 0 6px 8px -1px rgba(0, 0, 0, 0.08), 0 4px 6px -1px rgba(0, 0, 0, 0.04);
+  width: 28px;
+  box-shadow: 3px 0 6px -1px rgba(0, 0, 0, 0.08);
 }
 
 .sidebar-toggle-btn:active {
-  transform: translateY(0);
+  background: #f3f4f6;
 }
 
 /* ========== Inline empty tree ========== */
