@@ -41,3 +41,26 @@ This project is built using:
    ```bash
    npm run preview
    ```
+
+## Deployment via Google Cloud Run
+
+This project includes an automated deployment script (`deploy.sh`) to build a highly optimized Docker container and securely deploy it to Google Cloud Run with Identity-Aware Proxy (IAP) enabled.
+
+1. **Configure your Environment**
+   Copy the provided `.env.example` file to create your own configuration:
+   ```bash
+   cp .env.example .env
+   ```
+   Open the `.env` file and set the required `PROJECT_ID`. Other fields (`REGION`, `MAX_INSTANCES`, etc.) are optional and will fall back to sensible defaults.
+
+2. **Execute Deployment**
+   Run the deployment script:
+   ```bash
+   ./deploy.sh
+   ```
+
+This script will automatically:
+- Provision an Artifact Registry repository for your Docker images.
+- Initiate a Cloud Build process using the optimizing multi-stage `Dockerfile`.
+- Deploy the resulting Nginx-served static site container to Cloud Run.
+- Secure the `run.app` endpoint natively using Google Cloud IAP, allowing access only to users possessing the "IAP-secured Web App User" IAM role.
