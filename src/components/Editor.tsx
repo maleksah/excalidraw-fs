@@ -61,6 +61,15 @@ export const Editor = () => {
                         elements: parsed.elements || [],
                         appState: {
                             ...restAppState,
+                            activeTool: { type: "selection", customType: null },
+                            selectedElementIds: {},
+                            editingElement: null,
+                            draggingElement: null,
+                            resizingElement: null,
+                            selectionElement: null,
+                            multiElement: null,
+                            editingGroupId: null,
+                            editingLinearElement: null,
                             viewBackgroundColor: restAppState?.viewBackgroundColor || '#ffffff',
                             currentItemFontFamily: restAppState?.currentItemFontFamily ?? 2,
                             currentItemRoughness: restAppState?.currentItemRoughness ?? 0,
@@ -144,12 +153,28 @@ export const Editor = () => {
         }
 
         saveTimeoutRef.current = setTimeout(async () => {
+            const {
+                collaborators,
+                selectedElementIds,
+                draggingElement,
+                resizingElement,
+                editingElement,
+                selectionElement,
+                multiElement,
+                editingGroupId,
+                editingLinearElement,
+                activeTool,
+                cursorButton,
+                scrolledOutside,
+                contextMenu,
+                toast,
+                pasteDialog,
+                ...appStateToSave
+            } = appState as any;
+
             const content = JSON.stringify({
                 elements,
-                appState: {
-                    ...appState,
-                    collaborators: undefined // don't save collaborators
-                },
+                appState: appStateToSave,
                 files,
             }, null, 2);
 
