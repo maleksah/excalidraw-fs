@@ -25,6 +25,19 @@ export const Editor = () => {
         }
     }, [selectedFile]);
 
+    // Prevent closing window if there are unsaved changes
+    useEffect(() => {
+        const handleBeforeUnload = (e: BeforeUnloadEvent) => {
+            if (saveState === 'not-saved' || saveState === 'saving') {
+                e.preventDefault();
+                e.returnValue = '';
+            }
+        };
+
+        window.addEventListener('beforeunload', handleBeforeUnload);
+        return () => window.removeEventListener('beforeunload', handleBeforeUnload);
+    }, [saveState]);
+
     useEffect(() => {
         const loadFile = async () => {
             if (!selectedFile || selectedFile.kind !== 'file') {
