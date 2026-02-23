@@ -83,6 +83,13 @@ const FileTreeNodeWithParent = ({ node, depth, parentHandle, inlineAdd, setInlin
 
     const isSelected = selectedFile?.id === node.id;
     const isDirectory = node.kind === 'directory';
+
+    // Auto-open if selected file is inside this directory
+    useEffect(() => {
+        if (isDirectory && selectedFile && selectedFile.id.startsWith(node.id + '/')) {
+            setIsOpen(true);
+        }
+    }, [selectedFile?.id, isDirectory, node.id]);
     const isBeingDragged = dragState?.node.id === node.id;
     const hasInlineAdd = inlineAdd && inlineAdd.parentId === node.id;
     const isRenaming = renameState?.id === node.id;
