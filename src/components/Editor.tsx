@@ -10,13 +10,16 @@ export const Editor = () => {
     const [initialData, setInitialData] = useState<any>(null);
     const [isLoading, setIsLoading] = useState(false);
     const [error, setError] = useState<string | null>(null);
+    const [saveState, setSaveState] = useState<'idle' | 'not-saved' | 'saving' | 'saved'>('idle');
     const excalidrawAPI = useRef<any>(null);
     const saveTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+    const saveStatusTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
 
     // Reset state when selection changes
     useEffect(() => {
         setInitialData(null);
         setError(null);
+        setSaveState('idle');
         if (selectedFile) {
             setIsLoading(true);
         }
@@ -69,8 +72,56 @@ export const Editor = () => {
         }
     }, [selectedFile, readFileContent]);
 
+    const lastSavedDataRef = useRef<string | null>(null);
+    const lastSeenDataRef = useRef<string | null>(null);
+
     const handleChange = useCallback((elements: readonly ExcalidrawElement[], appState: AppState, files: BinaryFiles) => {
         if (!selectedFile) return;
+
+        // Skip saving if we are just loading
+        if (isLoading) return;
+
+        // Create a payload that excludes selection state and transient appState
+        const documentStateForComparison = {
+            elements: elements.map(el => ({
+                ...el,
+            })).map(el => {
+                const { isSelected, ...rest } = el as any;
+                return rest;
+            }),
+            appState: {
+                viewBackgroundColor: appState.viewBackgroundColor,
+                currentItemFontFamily: appState.currentItemFontFamily,
+                currentItemRoughness: appState.currentItemRoughness,
+                theme: appState.theme,
+            },
+            files: Object.keys(files).length > 0 ? files : undefined,
+        };
+
+        const comparisonString = JSON.stringify(documentStateForComparison);
+
+        // Prevent infinite loop by checking against the EXACT same data we just saw on the last onChange
+        if (lastSeenDataRef.current === comparisonString) {
+            return;
+        }
+
+        lastSeenDataRef.current = comparisonString;
+
+        // If it's the very first load and we don't have a ref, just set it and return so it doesn't pop up "saved" on open
+        if (lastSavedDataRef.current === null) {
+            lastSavedDataRef.current = comparisonString;
+            return;
+        }
+
+        // If data reverted to the last saved data, we can pretend it's saved.
+        if (lastSavedDataRef.current === comparisonString) {
+            if (saveTimeoutRef.current) clearTimeout(saveTimeoutRef.current);
+            setSaveState('idle');
+            return;
+        }
+
+        // Document has actually changed, immediately show not-saved
+        setSaveState('not-saved');
 
         if (saveTimeoutRef.current) {
             clearTimeout(saveTimeoutRef.current);
@@ -79,17 +130,35 @@ export const Editor = () => {
         saveTimeoutRef.current = setTimeout(async () => {
             const content = JSON.stringify({
                 elements,
-                appState,
+                appState: {
+                    ...appState,
+                    collaborators: undefined // don't save collaborators
+                },
                 files,
             }, null, 2);
 
+            setSaveState('saving');
+
             try {
                 await saveFileContent(selectedFile.handle as FileSystemFileHandle, content);
+                lastSavedDataRef.current = comparisonString;
+
+                // Only show saved if we are still saving that same data (no new edits broke the chain)
+                if (lastSeenDataRef.current === comparisonString) {
+                    setSaveState('saved');
+                    if (saveStatusTimeoutRef.current) {
+                        clearTimeout(saveStatusTimeoutRef.current);
+                    }
+                    saveStatusTimeoutRef.current = setTimeout(() => {
+                        setSaveState(prev => prev === 'saved' ? 'idle' : prev);
+                    }, 2000);
+                }
             } catch (err) {
                 console.error("Failed to save", err);
+                setSaveState('idle');
             }
         }, 1000);
-    }, [selectedFile, saveFileContent]);
+    }, [selectedFile, saveFileContent, isLoading]);
 
     if (!selectedFile) {
         return (
@@ -143,6 +212,14 @@ export const Editor = () => {
                             }
                         }}
                     />
+                    <div className={`save-status ${saveState}`}>
+                        <div className="save-status-indicator"></div>
+                        <span>
+                            {saveState === 'saving' ? 'Saving...' :
+                                saveState === 'saved' ? 'Saved' :
+                                    saveState === 'not-saved' ? 'Unsaved changes' : ''}
+                        </span>
+                    </div>
                 </div>
             )}
         </div>
