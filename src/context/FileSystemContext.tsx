@@ -3,7 +3,7 @@ import type { ReactNode } from 'react';
 import { get, set } from 'idb-keyval';
 
 const DIR_HANDLE_KEY = 'excalidraw-last-directory-handle';
-
+const FILE_ID_KEY = 'excalidraw-last-file-id';
 // Types for File System Access API (if not fully available in current TS lib)
 // In modern browsers these are global, but we define interfaces for clarity/safety
 export interface FileSystemHandle {
@@ -81,6 +81,15 @@ export const FileSystemProvider = ({ children }: { children: ReactNode }) => {
     const [fileTree, setFileTree] = useState<FileNode[]>([]);
     const [selectedFile, setSelectedFile] = useState<FileNode | null>(null);
 
+    const handleSelectFile = useCallback(async (file: FileNode | null) => {
+        setSelectedFile(file);
+        if (file) {
+            await set(FILE_ID_KEY, file.id);
+        } else {
+            await set(FILE_ID_KEY, null);
+        }
+    }, []);
+
     const scanDirectory = useCallback(async (dirHandle: FileSystemDirectoryHandle, path: string = ''): Promise<FileNode[]> => {
         const nodes: FileNode[] = [];
 
@@ -139,6 +148,22 @@ export const FileSystemProvider = ({ children }: { children: ReactNode }) => {
                     setRootHandle(storedHandle);
                     const tree = await scanDirectory(storedHandle);
                     setFileTree(tree);
+
+                    const lastFileId = await get<string>(FILE_ID_KEY);
+                    if (lastFileId) {
+                        const findNodeById = (nodes: FileNode[], id: string): FileNode | null => {
+                            for (const node of nodes) {
+                                if (node.id === id) return node;
+                                if (node.children) {
+                                    const found = findNodeById(node.children, id);
+                                    if (found) return found;
+                                }
+                            }
+                            return null;
+                        };
+                        const fileNode = findNodeById(tree, lastFileId);
+                        if (fileNode) setSelectedFile(fileNode);
+                    }
                     return;
                 }
 
@@ -148,6 +173,22 @@ export const FileSystemProvider = ({ children }: { children: ReactNode }) => {
                     setRootHandle(storedHandle);
                     const tree = await scanDirectory(storedHandle);
                     setFileTree(tree);
+
+                    const lastFileId = await get<string>(FILE_ID_KEY);
+                    if (lastFileId) {
+                        const findNodeById = (nodes: FileNode[], id: string): FileNode | null => {
+                            for (const node of nodes) {
+                                if (node.id === id) return node;
+                                if (node.children) {
+                                    const found = findNodeById(node.children, id);
+                                    if (found) return found;
+                                }
+                            }
+                            return null;
+                        };
+                        const fileNode = findNodeById(tree, lastFileId);
+                        if (fileNode) setSelectedFile(fileNode);
+                    }
                 }
             } catch (err) {
                 console.warn('Could not restore last directory:', err);
@@ -163,7 +204,7 @@ export const FileSystemProvider = ({ children }: { children: ReactNode }) => {
             setRootHandle(handle);
             const tree = await scanDirectory(handle);
             setFileTree(tree);
-            setSelectedFile(null);
+            handleSelectFile(null);
             // Persist the handle for next page load
             await set(DIR_HANDLE_KEY, handle);
         } catch (err) {
@@ -206,7 +247,7 @@ export const FileSystemProvider = ({ children }: { children: ReactNode }) => {
             await parentHandle.removeEntry(name);
             // If deleted file was selected, deselect it
             if (selectedFile && selectedFile.name === name) { // Simple check, ideally check path
-                setSelectedFile(null);
+                handleSelectFile(null);
             }
             await refreshDirectory();
         } catch (err) {
@@ -233,7 +274,7 @@ export const FileSystemProvider = ({ children }: { children: ReactNode }) => {
 
             // If the moved file was selected, update selection to the new handle
             if (selectedFile && selectedFile.name === fileName) {
-                setSelectedFile(null);
+                handleSelectFile(null);
             }
 
             await refreshDirectory();
@@ -260,7 +301,7 @@ export const FileSystemProvider = ({ children }: { children: ReactNode }) => {
                 rootHandle,
                 fileTree,
                 selectedFile,
-                selectFile: setSelectedFile,
+                selectFile: handleSelectFile,
                 openDirectory,
                 refreshDirectory,
                 createFile,
