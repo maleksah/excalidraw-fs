@@ -16,6 +16,7 @@ export const Editor = () => {
     const saveStatusTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
     const lastSavedDataRef = useRef<string | null>(null);
     const lastSeenDataRef = useRef<string | null>(null);
+    const lastSeenViewRef = useRef<string | null>(null);
 
     // Reset state when selection changes
     useEffect(() => {
@@ -24,6 +25,7 @@ export const Editor = () => {
         setSaveState('idle');
         lastSavedDataRef.current = null;
         lastSeenDataRef.current = null;
+        lastSeenViewRef.current = null;
         if (saveTimeoutRef.current) clearTimeout(saveTimeoutRef.current);
         if (saveStatusTimeoutRef.current) clearTimeout(saveStatusTimeoutRef.current);
         if (selectedFile) {
@@ -106,7 +108,7 @@ export const Editor = () => {
         // Skip saving if we are just loading
         if (isLoading) return;
 
-        // Create a payload that excludes selection state and transient appState
+        // Create a payload that excludes selection state, transient appState, and view/zoom config
         const documentStateForComparison = {
             elements: elements.map(el => ({
                 ...el,
@@ -123,34 +125,52 @@ export const Editor = () => {
             files: Object.keys(files).length > 0 ? files : undefined,
         };
 
-        const comparisonString = JSON.stringify(documentStateForComparison);
+        const viewStateForComparison = {
+            zoom: appState.zoom,
+            scrollX: appState.scrollX,
+            scrollY: appState.scrollY,
+        };
 
-        // Prevent infinite loop by checking against the EXACT same data we just saw on the last onChange
-        if (lastSeenDataRef.current === comparisonString) {
+        const documentComparisonString = JSON.stringify(documentStateForComparison);
+        const viewComparisonString = JSON.stringify(viewStateForComparison);
+
+        const isDocumentChanged = lastSeenDataRef.current !== documentComparisonString;
+        const isViewChanged = lastSeenViewRef.current !== viewComparisonString;
+
+        if (!isDocumentChanged && !isViewChanged) {
             return;
         }
-
-        lastSeenDataRef.current = comparisonString;
 
         // If it's the very first load and we don't have a ref, just set it and return so it doesn't pop up "saved" on open
         if (lastSavedDataRef.current === null) {
-            lastSavedDataRef.current = comparisonString;
+            lastSavedDataRef.current = documentComparisonString;
+            lastSeenDataRef.current = documentComparisonString;
+            lastSeenViewRef.current = viewComparisonString;
             return;
         }
 
-        // If data reverted to the last saved data, we can pretend it's saved.
-        if (lastSavedDataRef.current === comparisonString) {
+        lastSeenDataRef.current = documentComparisonString;
+        lastSeenViewRef.current = viewComparisonString;
+
+        // If document data reverted to the last saved data, we can pretend it's saved.
+        if (isDocumentChanged && lastSavedDataRef.current === documentComparisonString) {
             if (saveTimeoutRef.current) clearTimeout(saveTimeoutRef.current);
             setSaveState('idle');
             return;
         }
 
-        // Document has actually changed, immediately show not-saved
-        setSaveState('not-saved');
+        // We should show the UI if the document actually changed OR it had unsaved document changes previously
+        const hasUnsavedDocumentChanges = lastSavedDataRef.current !== documentComparisonString;
+        if (hasUnsavedDocumentChanges) {
+            setSaveState('not-saved');
+        }
 
         if (saveTimeoutRef.current) {
             clearTimeout(saveTimeoutRef.current);
         }
+
+        // Use a shorter debounce for silent view-only saves to make them feel "instant", 1s for normal typing
+        const debounceDelay = hasUnsavedDocumentChanges ? 1000 : 300;
 
         saveTimeoutRef.current = setTimeout(async () => {
             const {
@@ -178,27 +198,33 @@ export const Editor = () => {
                 files,
             }, null, 2);
 
-            setSaveState('saving');
+            if (hasUnsavedDocumentChanges) {
+                setSaveState('saving');
+            }
 
             try {
                 await saveFileContent(selectedFile.handle as FileSystemFileHandle, content);
-                lastSavedDataRef.current = comparisonString;
 
-                // Only show saved if we are still saving that same data (no new edits broke the chain)
-                if (lastSeenDataRef.current === comparisonString) {
-                    setSaveState('saved');
-                    if (saveStatusTimeoutRef.current) {
-                        clearTimeout(saveStatusTimeoutRef.current);
+                // Always mark document as saved so we don't trigger false popups later
+                lastSavedDataRef.current = documentComparisonString;
+
+                if (hasUnsavedDocumentChanges) {
+                    // Only show saved if we are still saving that same data (no new edits broke the chain)
+                    if (lastSeenDataRef.current === documentComparisonString) {
+                        setSaveState('saved');
+                        if (saveStatusTimeoutRef.current) {
+                            clearTimeout(saveStatusTimeoutRef.current);
+                        }
+                        saveStatusTimeoutRef.current = setTimeout(() => {
+                            setSaveState(prev => prev === 'saved' ? 'idle' : prev);
+                        }, 2000);
                     }
-                    saveStatusTimeoutRef.current = setTimeout(() => {
-                        setSaveState(prev => prev === 'saved' ? 'idle' : prev);
-                    }, 2000);
                 }
             } catch (err) {
                 console.error("Failed to save", err);
                 setSaveState('idle');
             }
-        }, 1000);
+        }, debounceDelay);
     }, [selectedFile, saveFileContent, isLoading]);
 
     if (!selectedFile) {
