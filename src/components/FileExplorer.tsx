@@ -15,6 +15,11 @@ type DragState = {
     parentHandle: FileSystemDirectoryHandle;
 } | null;
 
+type RenameState = {
+    id: string; // node id
+    name: string;
+} | null;
+
 const InlineInput = ({ type, onSubmit, onCancel, depth }: {
     type: 'file' | 'folder';
     onSubmit: (name: string) => void;
@@ -59,7 +64,7 @@ const InlineInput = ({ type, onSubmit, onCancel, depth }: {
     );
 };
 
-const FileTreeNodeWithParent = ({ node, depth, parentHandle, inlineAdd, setInlineAdd, dragState, setDragState, searchQuery }: {
+const FileTreeNodeWithParent = ({ node, depth, parentHandle, inlineAdd, setInlineAdd, dragState, setDragState, renameState, setRenameState, searchQuery }: {
     node: FileNode;
     depth: number;
     parentHandle: FileSystemDirectoryHandle;
@@ -67,9 +72,11 @@ const FileTreeNodeWithParent = ({ node, depth, parentHandle, inlineAdd, setInlin
     setInlineAdd: (state: InlineAddState) => void;
     dragState: DragState;
     setDragState: (state: DragState) => void;
+    renameState: RenameState;
+    setRenameState: (state: RenameState) => void;
     searchQuery?: string;
 }) => {
-    const { selectFile, selectedFile, deleteEntry, createFile, createFolder, moveFile } = useFileSystem();
+    const { selectFile, selectedFile, deleteEntry, renameEntry, createFile, createFolder, moveFile } = useFileSystem();
     const [isOpen, setIsOpen] = useState(false);
     const [isDragOver, setIsDragOver] = useState(false);
     const nodeRef = useRef<HTMLDivElement>(null);
@@ -78,15 +85,31 @@ const FileTreeNodeWithParent = ({ node, depth, parentHandle, inlineAdd, setInlin
     const isDirectory = node.kind === 'directory';
     const isBeingDragged = dragState?.node.id === node.id;
     const hasInlineAdd = inlineAdd && inlineAdd.parentId === node.id;
+    const isRenaming = renameState?.id === node.id;
+    const renameInputRef = useRef<HTMLInputElement>(null);
 
     // Auto-open folder when inline add targets it
     useEffect(() => {
         if (hasInlineAdd && !isOpen) setIsOpen(true);
     }, [hasInlineAdd]);
 
+    // Auto focus renaming input
+    useEffect(() => {
+        if (isRenaming) {
+            const timer = setTimeout(() => {
+                if (renameInputRef.current) {
+                    renameInputRef.current.focus();
+                    renameInputRef.current.select();
+                }
+            }, 50);
+            return () => clearTimeout(timer);
+        }
+    }, [isRenaming]);
+
     const isEffectivelyOpen = isOpen || Boolean(searchQuery);
 
     const handleClick = (e: React.MouseEvent) => {
+        if (isRenaming) return;
         e.stopPropagation();
         if (isDirectory) {
             if (searchQuery) {
@@ -98,6 +121,57 @@ const FileTreeNodeWithParent = ({ node, depth, parentHandle, inlineAdd, setInlin
             }
         } else {
             selectFile(node);
+        }
+    };
+
+    const handleDoubleClick = (e: React.MouseEvent) => {
+        e.stopPropagation();
+        const displayName = node.kind === 'file' ? node.name.replace('.excalidraw', '') : node.name;
+        setRenameState({ id: node.id, name: displayName });
+    };
+
+    const handleRenameSubmit = async () => {
+        if (!renameState) return;
+        const newName = renameState.name.trim();
+        const oldName = node.name;
+        const oldDisplayName = node.kind === 'file' ? oldName.replace('.excalidraw', '') : oldName;
+
+        // If no change or empty string, just cancel
+        if (!newName || newName === oldDisplayName) {
+            setRenameState(null);
+            return;
+        }
+
+        // Ensure extension for files
+        const finalName = node.kind === 'file' && !newName.endsWith('.excalidraw')
+            ? `${newName}.excalidraw`
+            : newName;
+
+        try {
+            await renameEntry(parentHandle, oldName, finalName, node.kind);
+            if (node.kind === 'file') {
+                const newHandle = await parentHandle.getFileHandle(finalName);
+                const lastSlashIndex = node.id.lastIndexOf('/');
+                const newId = lastSlashIndex >= 0 ? `${node.id.slice(0, lastSlashIndex)}/${finalName}` : finalName;
+                selectFile({
+                    id: newId,
+                    name: finalName,
+                    kind: 'file',
+                    handle: newHandle
+                });
+            }
+        } catch {
+            alert('Failed to rename entry. Your browser might not support folder renaming.');
+        }
+        setRenameState(null);
+    };
+
+    const handleRenameKeyDown = (e: React.KeyboardEvent) => {
+        if (e.key === 'Enter') {
+            e.preventDefault();
+            handleRenameSubmit();
+        } else if (e.key === 'Escape') {
+            setRenameState(null);
         }
     };
 
@@ -227,9 +301,10 @@ const FileTreeNodeWithParent = ({ node, depth, parentHandle, inlineAdd, setInlin
         <div>
             <div
                 ref={nodeRef}
-                className={`tree-node${isSelected ? ' selected' : ''}${isDragOver ? ' drag-over' : ''}${isBeingDragged ? ' dragging' : ''}`}
+                className={`tree-node${isSelected && !isRenaming ? ' selected' : ''}${isDragOver ? ' drag-over' : ''}${isBeingDragged ? ' dragging' : ''}`}
                 style={{ paddingLeft: `${depth * 16 + 12}px` }}
                 onClick={handleClick}
+                onDoubleClick={handleDoubleClick}
             >
                 <span className={`tree-node-chevron${isEffectivelyOpen && isDirectory ? ' open' : ''}`}>
                     {isDirectory && <ChevronRight size={14} strokeWidth={2.5} />}
@@ -239,23 +314,38 @@ const FileTreeNodeWithParent = ({ node, depth, parentHandle, inlineAdd, setInlin
                     {isDirectory ? <Folder size={18} /> : <File size={18} />}
                 </span>
 
-                <span className="tree-node-name">{node.name.replace('.excalidraw', '')}</span>
+                {isRenaming ? (
+                    <input
+                        ref={renameInputRef}
+                        type="text"
+                        className="inline-add-input"
+                        style={{ marginLeft: 4, height: 20 }}
+                        value={renameState.name}
+                        onChange={(e) => setRenameState({ ...renameState, name: e.target.value })}
+                        onKeyDown={handleRenameKeyDown}
+                        onBlur={handleRenameSubmit}
+                    />
+                ) : (
+                    <span className="tree-node-name">{node.name.replace('.excalidraw', '')}</span>
+                )}
 
-                <div className="tree-node-actions">
-                    {isDirectory && (
-                        <>
-                            <button onClick={handleAddFileInFolder} className="folder-add-btn" title="New File Here">
-                                <FilePlus size={13} />
-                            </button>
-                            <button onClick={handleAddFolderInFolder} className="folder-add-btn" title="New Folder Here">
-                                <FolderPlus size={13} />
-                            </button>
-                        </>
-                    )}
-                    <button onClick={handleDelete} className="delete-btn" title="Delete">
-                        <Trash2 size={13} />
-                    </button>
-                </div>
+                {!isRenaming && (
+                    <div className="tree-node-actions">
+                        {isDirectory && (
+                            <>
+                                <button onClick={handleAddFileInFolder} className="folder-add-btn" title="New File Here">
+                                    <FilePlus size={13} />
+                                </button>
+                                <button onClick={handleAddFolderInFolder} className="folder-add-btn" title="New Folder Here">
+                                    <FolderPlus size={13} />
+                                </button>
+                            </>
+                        )}
+                        <button onClick={handleDelete} className="delete-btn" title="Delete">
+                            <Trash2 size={13} />
+                        </button>
+                    </div>
+                )}
             </div>
 
             <AnimatePresence>
@@ -276,6 +366,8 @@ const FileTreeNodeWithParent = ({ node, depth, parentHandle, inlineAdd, setInlin
                                 setInlineAdd={setInlineAdd}
                                 dragState={dragState}
                                 setDragState={setDragState}
+                                renameState={renameState}
+                                setRenameState={setRenameState}
                                 searchQuery={searchQuery}
                             />
                         ))}
@@ -298,6 +390,7 @@ export const FileExplorer = () => {
     const { rootHandle, fileTree, openDirectory, createFile, createFolder, moveFile } = useFileSystem();
     const [inlineAdd, setInlineAdd] = useState<InlineAddState>(null);
     const [dragState, setDragState] = useState<DragState>(null);
+    const [renameState, setRenameState] = useState<RenameState>(null);
     const [searchQuery, setSearchQuery] = useState('');
 
     const filteredTree = useMemo(() => {
@@ -428,6 +521,8 @@ export const FileExplorer = () => {
                         setInlineAdd={setInlineAdd}
                         dragState={dragState}
                         setDragState={setDragState}
+                        renameState={renameState}
+                        setRenameState={setRenameState}
                         searchQuery={searchQuery}
                     />
                 ))}

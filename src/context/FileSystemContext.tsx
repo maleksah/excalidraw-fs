@@ -61,6 +61,7 @@ interface FileSystemContextType {
     createFile: (parentHandle: FileSystemDirectoryHandle, name: string) => Promise<void>;
     createFolder: (parentHandle: FileSystemDirectoryHandle, name: string) => Promise<void>;
     deleteEntry: (parentHandle: FileSystemDirectoryHandle, name: string) => Promise<void>;
+    renameEntry: (parentHandle: FileSystemDirectoryHandle, oldName: string, newName: string, kind: 'file' | 'directory') => Promise<void>;
     moveFile: (sourceParent: FileSystemDirectoryHandle, targetParent: FileSystemDirectoryHandle, fileName: string) => Promise<void>;
     readFileContent: (handle: FileSystemFileHandle) => Promise<string>;
     saveFileContent: (handle: FileSystemFileHandle, content: string) => Promise<void>;
@@ -256,6 +257,58 @@ export const FileSystemProvider = ({ children }: { children: ReactNode }) => {
         }
     };
 
+    const renameEntry = async (parentHandle: FileSystemDirectoryHandle, oldName: string, newName: string, kind: 'file' | 'directory') => {
+        try {
+            if (kind === 'file') {
+                const sourceFileHandle = await parentHandle.getFileHandle(oldName);
+                if ((sourceFileHandle as any).move) {
+                    await (sourceFileHandle as any).move(newName);
+                } else {
+                    const sourceFile = await sourceFileHandle.getFile();
+                    const content = await sourceFile.text();
+                    const targetFileHandle = await parentHandle.getFileHandle(newName, { create: true });
+                    const writable = await targetFileHandle.createWritable();
+                    await writable.write(content);
+                    await writable.close();
+                    await parentHandle.removeEntry(oldName);
+                }
+            } else {
+                const sourceDirHandle = await parentHandle.getDirectoryHandle(oldName);
+                if ((sourceDirHandle as any).move) {
+                    await (sourceDirHandle as any).move(newName);
+                } else {
+                    // Fallback: recursive copy and delete
+                    const newDirHandle = await parentHandle.getDirectoryHandle(newName, { create: true });
+                    const copyRecursive = async (src: FileSystemDirectoryHandle, dest: FileSystemDirectoryHandle) => {
+                        for await (const [name, handle] of src.entries()) {
+                            if (handle.kind === 'file') {
+                                const srcFile = await (handle as FileSystemFileHandle).getFile();
+                                const content = await srcFile.text();
+                                const destFileHandle = await dest.getFileHandle(name, { create: true });
+                                const writable = await destFileHandle.createWritable();
+                                await writable.write(content);
+                                await writable.close();
+                            } else if (handle.kind === 'directory') {
+                                const newDest = await dest.getDirectoryHandle(name, { create: true });
+                                await copyRecursive(handle as FileSystemDirectoryHandle, newDest);
+                            }
+                        }
+                    };
+                    await copyRecursive(sourceDirHandle, newDirHandle);
+                    await parentHandle.removeEntry(oldName, { recursive: true });
+                }
+            }
+            if (selectedFile && selectedFile.name === oldName) {
+                // To be safe, clear selection just like move File.
+                handleSelectFile(null);
+            }
+            await refreshDirectory();
+        } catch (err) {
+            console.error('Error renaming entry:', err);
+            throw err;
+        }
+    };
+
     const moveFile = async (sourceParent: FileSystemDirectoryHandle, targetParent: FileSystemDirectoryHandle, fileName: string) => {
         try {
             // Read the source file content
@@ -307,6 +360,7 @@ export const FileSystemProvider = ({ children }: { children: ReactNode }) => {
                 createFile,
                 createFolder,
                 deleteEntry,
+                renameEntry,
                 moveFile,
                 readFileContent,
                 saveFileContent,
