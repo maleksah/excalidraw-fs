@@ -14,12 +14,18 @@ export const Editor = () => {
     const excalidrawAPI = useRef<any>(null);
     const saveTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
     const saveStatusTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+    const lastSavedDataRef = useRef<string | null>(null);
+    const lastSeenDataRef = useRef<string | null>(null);
 
     // Reset state when selection changes
     useEffect(() => {
         setInitialData(null);
         setError(null);
         setSaveState('idle');
+        lastSavedDataRef.current = null;
+        lastSeenDataRef.current = null;
+        if (saveTimeoutRef.current) clearTimeout(saveTimeoutRef.current);
+        if (saveStatusTimeoutRef.current) clearTimeout(saveStatusTimeoutRef.current);
         if (selectedFile) {
             setIsLoading(true);
         }
@@ -84,9 +90,6 @@ export const Editor = () => {
             loadFile();
         }
     }, [selectedFile, readFileContent]);
-
-    const lastSavedDataRef = useRef<string | null>(null);
-    const lastSeenDataRef = useRef<string | null>(null);
 
     const handleChange = useCallback((elements: readonly ExcalidrawElement[], appState: AppState, files: BinaryFiles) => {
         if (!selectedFile) return;
